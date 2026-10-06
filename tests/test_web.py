@@ -140,3 +140,43 @@ def test_cross_origin_post_blocked(client):
         "/login", data={"email": "a@b.c"}, headers={"Origin": "https://evil.example"}
     )
     assert resp.status_code == 403
+
+
+def test_served_under_subpath(tmp_path):
+    from app.config import Settings
+
+    settings = Settings(
+        _env_file=None,
+        database_path=str(tmp_path / "sub.db"),
+        admin_email="admin@example.com",
+        secret_key="test-secret",
+        mail_console=True,
+        poll_enabled=False,
+        base_url="http://testserver/tennis",
+        root_path="/tennis/",
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        html = client.get("/").text  # the proxy strips /tennis before it reaches the app
+        assert 'href="/tennis/static/style.css' in html
+        assert 'href="/tennis/login"' in html
+        assert 'href="/tennis/?venue=west-ham-park"' in html
+        assert not re.search(r'(href|action|hx-post)="/(?!tennis)', html)
+
+        redirect = client.get("/alerts", follow_redirects=False)
+        assert redirect.headers["location"] == "/tennis/login"
+
+        client.post("/login", data={"email": "admin@example.com"})
+        mail = app.state.mailer.outbox[-1]
+        assert "http://testserver/tennis/auth/verify?token=" in mail.text
+        token = re.search(r"token=([\w\-.]+)", mail.text).group(1)
+        resp = client.post("/auth/verify", data={"token": token}, follow_redirects=False)
+        assert resp.headers["location"] == "/tennis/alerts"
+        assert "Path=/tennis/" in resp.headers["set-cookie"]
+        # The browser sends it for /tennis/* URLs; nginx strips the prefix, so re-scope it here.
+        session = resp.cookies["cw_session"]
+        client.cookies.clear()
+        client.cookies.set("cw_session", session)
+
+        resp = client.post("/admin/invites", data={"email": "a b@x.com"}, follow_redirects=False)
+        assert resp.headers["location"] == "/tennis/admin?msg=Invited+a+b%40x.com"

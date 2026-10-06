@@ -5,14 +5,14 @@
   <div class="card-body">
     {% if not valid %}
       <h1>Link expired</h1>
-      <p class="muted"><a href="/login">Sign in</a> to manage your alerts.</p>
+      <p class="muted"><a href="{{ root }}/login">Sign in</a> to manage your alerts.</p>
     {% elif done %}
       <h1>Alerts paused</h1>
-      <p class="muted">You won't get any more alert emails. Resume them any time from <a href="/alerts">My alerts</a>.</p>
+      <p class="muted">You won't get any more alert emails. Resume them any time from <a href="{{ root }}/alerts">My alerts</a>.</p>
     {% else %}
       <h1>Pause all alerts?</h1>
       <p class="muted">You can resume them later from My alerts.</p>
-      <form method="post" action="/alerts/pause">
+      <form method="post" action="{{ root }}/alerts/pause">
         <input type="hidden" name="token" value="{{ token }}">
         <button class="btn block" type="submit">Pause all alert emails</button>
       </form>

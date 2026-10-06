@@ -56,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = db
     app.state.mailer = Mailer(settings)
+    templates.env.globals["root"] = settings.prefix
 
     @app.middleware("http")
     async def same_origin_posts(request: Request, call_next):

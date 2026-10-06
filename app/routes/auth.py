@@ -56,11 +56,12 @@ def verify_submit(request: Request, token: str = Form(...)):
         return templates.TemplateResponse(
             request, "verify.html", {"user": None, "token": None, "email": None}, status_code=400
         )
-    response = RedirectResponse("/alerts", status_code=303)
+    response = RedirectResponse(request.app.state.settings.path("/alerts"), status_code=303)
     response.set_cookie(
         auth.SESSION_COOKIE,
         auth.session_cookie_value(settings, user_id),
         max_age=auth.SESSION_MAX_AGE,
+        path=settings.path("/"),
         httponly=True,
         secure=settings.secure_cookies,
         samesite="lax",
@@ -69,7 +70,8 @@ def verify_submit(request: Request, token: str = Form(...)):
 
 
 @router.post("/logout")
-def logout():
-    response = RedirectResponse("/", status_code=303)
-    response.delete_cookie(auth.SESSION_COOKIE)
+def logout(request: Request):
+    settings = request.app.state.settings
+    response = RedirectResponse(settings.path("/"), status_code=303)
+    response.delete_cookie(auth.SESSION_COOKIE, path=settings.path("/"))
     return response

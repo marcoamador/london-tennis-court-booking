@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://${{ vars.SITE_HOST }}
+      url: ${{ vars.APP_URL }}
     steps:
       - name: Configure SSH
         env:
@@ -41,7 +41,7 @@ jobs:
       - name: Health check
         run: |
           for i in $(seq 1 20); do
-            if curl -fsS --max-time 5 "https://${{ vars.SITE_HOST }}/healthz"; then
+            if curl -fsS --max-time 5 "${{ vars.APP_URL }}/healthz"; then
               echo; echo "Healthy"; exit 0
             fi
             sleep 6

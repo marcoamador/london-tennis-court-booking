@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-head">
   <h1>East London Tennis Courts</h1>
-  <p>Free courts at a glance. {% if user %}Click a red slot to be emailed when it frees up.{% else %}<a href="/login">Sign in</a> to get emailed when a booked slot frees up.{% endif %}</p>
+  <p>Free courts at a glance. {% if user %}Click a red slot to be emailed when it frees up.{% else %}<a href="{{ root }}/login">Sign in</a> to get emailed when a booked slot frees up.{% endif %}</p>
 </div>
 
 <nav class="tabs" aria-label="Venues">
@@ -96,7 +96,7 @@
                 </td>
               {% elif c.state == 'booked' and user %}
                 <td class="slot booked clickable">
-                  <form hx-post="/alerts/quick" hx-target="closest td" hx-swap="outerHTML" method="post" action="/alerts/quick">
+                  <form hx-post="{{ root }}/alerts/quick" hx-target="closest td" hx-swap="outerHTML" method="post" action="{{ root }}/alerts/quick">
                     <input type="hidden" name="venue_id" value="{{ g.venue.id }}">
                     <input type="hidden" name="day" value="{{ d.isoformat() }}">
                     <input type="hidden" name="hour" value="{{ h }}">
@@ -104,7 +104,7 @@
                   </form>
                 </td>
               {% elif c.state == 'booked' %}
-                <td class="slot booked clickable"><a href="/login" title="Sign in to get notified"><span class="dash">–</span></a></td>
+                <td class="slot booked clickable"><a href="{{ root }}/login" title="Sign in to get notified"><span class="dash">–</span></a></td>
               {% elif c.state == 'past' %}
                 <td class="slot past"></td>
               {% else %}

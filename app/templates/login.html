@@ -5,7 +5,7 @@
   <div class="card-body">
     <h1>Sign in</h1>
     <p class="muted">CourtWatch is invite-only. Enter your email and we'll send you a sign-in link.</p>
-    <form method="post" action="/login">
+    <form method="post" action="{{ root }}/login">
       <div class="field">
         <label for="email">Email</label>
         <input id="email" type="email" name="email" placeholder="you@example.com" required autofocus autocomplete="email">

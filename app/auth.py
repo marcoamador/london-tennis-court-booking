@@ -119,7 +119,8 @@ def current_user(request: Request):
 def require_user(request: Request):
     user = current_user(request)
     if user is None:
-        raise HTTPException(status_code=303, headers={"Location": "/login"})
+        login = request.app.state.settings.path("/login")
+        raise HTTPException(status_code=303, headers={"Location": login})
     return user
 
 

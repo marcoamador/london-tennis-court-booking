@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     base_url: str = "http://localhost:8000"
+    # Serve under a subpath, e.g. "/tennis" when nginx forwards https://host/tennis/ to the app.
+    # The proxy strips the prefix; the app only uses it to build links. BASE_URL must include it.
+    root_path: str = ""
     secret_key: str = "dev-insecure-change-me"
     database_path: str = "data/courtwatch.db"
     admin_email: str = ""
@@ -32,6 +35,15 @@ class Settings(BaseSettings):
     courtside_enabled: bool = False
     courtside_email: str = ""
     courtside_password: str = ""
+
+    @property
+    def prefix(self) -> str:
+        p = self.root_path.strip().rstrip("/")
+        return f"/{p.lstrip('/')}" if p else ""
+
+    def path(self, path: str) -> str:
+        """Public URL path for an app path, e.g. "/alerts" -> "/tennis/alerts"."""
+        return self.prefix + path
 
     @property
     def secure_cookies(self) -> bool:

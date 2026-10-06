@@ -3,9 +3,12 @@
 The app runs as one Docker Compose container (`app`: FastAPI plus the 5-minute poller) listening only
 on `127.0.0.1:8000`. A reverse proxy in front provides HTTPS:
 
-- **Host nginx** (this server already runs nginx on ports 80/443): nginx forwards
-  `94-130-138-168.sslip.io` to the app and certbot handles the certificate. Your other nginx sites
-  are untouched. This is the path below.
+- **Host nginx** (this server already runs nginx on ports 80/443), either:
+  - **4a. as a subpath** of a site nginx already serves, e.g. `https://your-host/tennis/` next to
+    `/stocks`. This reuses that site's certificate, so it's the simplest option. Or:
+  - **4b. as its own hostname** `94-130-138-168.sslip.io`, with a new certbot certificate.
+
+  Either way your other nginx sites are untouched.
 - **Optional Caddy container**, for a server with nothing on 80/443: set `COMPOSE_PROFILES=caddy`
   in `.env` and skip the nginx step.
 
@@ -47,7 +50,8 @@ Fill in at least:
 | Variable | Value |
 |---|---|
 | `SITE_HOST` | `94-130-138-168.sslip.io` |
-| `BASE_URL` | `https://94-130-138-168.sslip.io` |
+| `BASE_URL` | public URL incl. any subpath: `https://your-host/tennis` (4a) or `https://94-130-138-168.sslip.io` (4b) |
+| `ROOT_PATH` | `/tennis` for 4a, empty for 4b |
 | `SECRET_KEY` | output of `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ADMIN_EMAIL` | your email |
 | `SMTP_USERNAME` / `MAIL_FROM` | your Gmail address |
@@ -77,7 +81,32 @@ You should see `Polled west-ham-park: … slots` lines within a minute. Check it
 curl -s http://127.0.0.1:8000/healthz
 ```
 
-## 4. Put it behind nginx with HTTPS
+## 4a. nginx: serve under a subpath (e.g. `/tennis`)
+
+In `/opt/courtwatch/.env` set (replace `your-host` with the hostname your `/stocks` app uses):
+
+```bash
+ROOT_PATH=/tennis
+BASE_URL=https://your-host/tennis
+```
+
+and re-run `./scripts/deploy.sh` as the deploy user. Then, as root, find the site that serves `/stocks`:
+
+```bash
+grep -rln "location /stocks" /etc/nginx/sites-enabled/
+```
+
+Open that file and paste the two `location` blocks from
+`/opt/courtwatch/deploy/nginx/courtwatch-subpath.conf` into its `server { ... }` block, the one with
+`listen 443 ssl`, next to the `/stocks` location. Then:
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+Open `https://your-host/tennis/`. No new certificate is needed.
+
+## 4b. nginx: serve on its own hostname
 
 As root (`exit` back from the deploy user):
 
@@ -107,7 +136,7 @@ Admin → *Invite a friend* → they sign in at `/login` with that email.
 `.github/workflows/deploy.yml` runs on every push to `main` (or manually via *Actions → Deploy →
 Run workflow*). It runs the tests, SSHes to the server, runs `scripts/deploy.sh <commit>` (fetch,
 check out exactly that commit, `docker compose up -d --build`), then waits for
-`https://94-130-138-168.sslip.io/healthz` to respond.
+`$APP_URL/healthz` to respond.
 
 ### a. Create a deploy key (on your own machine)
 
@@ -142,7 +171,7 @@ Repo → *Settings → Environments → New environment* `production`. Then add:
 | Secret | `DEPLOY_HOST` | `94.130.138.168` |
 | Secret | `DEPLOY_USER` | `deploy` |
 | Secret | `DEPLOY_KNOWN_HOSTS` | output of `ssh-keyscan -t ed25519 94.130.138.168` (pins the server's identity) |
-| Variable | `SITE_HOST` | `94-130-138-168.sslip.io` |
+| Variable | `APP_URL` | the app's public URL, no trailing slash: `https://your-host/tennis` (4a) or `https://94-130-138-168.sslip.io` (4b) |
 
 Optionally add yourself as a *required reviewer* on the environment, so each deploy waits for your
 click. Then delete the local private key file.

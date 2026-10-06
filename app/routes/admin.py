@@ -1,4 +1,5 @@
 import asyncio
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
@@ -9,6 +10,11 @@ from app.venues import all_venues
 
 router = APIRouter(prefix="/admin")
 _background: set[asyncio.Task] = set()  # keep references so tasks aren't garbage collected
+
+
+def _back(request: Request, msg: str = "") -> RedirectResponse:
+    query = f"?{urlencode({'msg': msg})}" if msg else ""
+    return RedirectResponse(request.app.state.settings.path(f"/admin{query}"), status_code=303)
 
 
 @router.get("")
@@ -46,14 +52,14 @@ def add_invite(request: Request, email: str = Form(...), user=Depends(auth.requi
                 "INSERT OR IGNORE INTO invites (email, invited_by, created_at) VALUES (?, ?, ?)",
                 (email, user["id"], auth.utcnow()),
             )
-    return RedirectResponse(f"/admin?msg=Invited {email}", status_code=303)
+    return _back(request, f"Invited {email}")
 
 
 @router.post("/invites/delete")
 def remove_invite(request: Request, email: str = Form(...), user=Depends(auth.require_admin)):
     with request.app.state.db.connect() as conn:
         conn.execute("DELETE FROM invites WHERE email = ?", (email,))
-    return RedirectResponse("/admin", status_code=303)
+    return _back(request)
 
 
 @router.post("/test-email")
@@ -65,7 +71,7 @@ async def test_email(request: Request, user=Depends(auth.require_admin)):
         msg = f"Test email sent to {user['email']}"
     except Exception as exc:
         msg = f"Sending failed: {exc!r}"
-    return RedirectResponse(f"/admin?msg={msg}", status_code=303)
+    return _back(request, msg)
 
 
 @router.post("/poll")
@@ -73,4 +79,4 @@ async def poll_now(request: Request, user=Depends(auth.require_admin)):
     task = asyncio.create_task(run_poll(request.app))
     _background.add(task)
     task.add_done_callback(_background.discard)
-    return RedirectResponse("/admin?msg=Poll started — refresh in a few seconds", status_code=303)
+    return _back(request, "Poll started — refresh in a few seconds")

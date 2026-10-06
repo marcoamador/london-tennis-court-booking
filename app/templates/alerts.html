@@ -9,7 +9,7 @@
 {% if user.alerts_paused %}
 <div class="notice warn">
   <b>All alerts are paused.</b>
-  <form method="post" action="/alerts/pause-all" class="inline"><button class="btn sm secondary" style="margin-left:0.75rem">Resume alerts</button></form>
+  <form method="post" action="{{ root }}/alerts/pause-all" class="inline"><button class="btn sm secondary" style="margin-left:0.75rem">Resume alerts</button></form>
 </div>
 {% endif %}
 
@@ -26,8 +26,8 @@
           <td>{% if rule.weekdays|length == 7 %}Every day{% elif rule.weekdays|sort|list == [5, 6] %}Weekends{% else %}{% for d in rule.weekdays|sort %}{{ weekday_names[d] }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</td>
           <td>{{ row.time_from }} – {{ row.time_to }}</td>
           <td class="actions">
-            <form method="post" action="/alerts/{{ row.id }}/toggle" class="inline"><button class="btn sm secondary">{{ 'Pause' if row.active else 'Resume' }}</button></form>
-            <form method="post" action="/alerts/{{ row.id }}/delete" class="inline"><button class="btn sm danger">Delete</button></form>
+            <form method="post" action="{{ root }}/alerts/{{ row.id }}/toggle" class="inline"><button class="btn sm secondary">{{ 'Pause' if row.active else 'Resume' }}</button></form>
+            <form method="post" action="{{ root }}/alerts/{{ row.id }}/delete" class="inline"><button class="btn sm danger">Delete</button></form>
           </td>
         </tr>
       {% endfor %}
@@ -35,14 +35,14 @@
     </table>
   </div>
   {% else %}
-    <div class="empty">No alerts yet. Create one below, or click a red slot on the <a href="/">courts page</a>.</div>
+    <div class="empty">No alerts yet. Create one below, or click a red slot on the <a href="{{ root }}/">courts page</a>.</div>
   {% endif %}
 </section>
 
 <section class="card">
   <div class="card-head"><h2>New alert</h2></div>
   <div class="card-body">
-    <form method="post" action="/alerts">
+    <form method="post" action="{{ root }}/alerts">
       <fieldset>
         <legend>Venues</legend>
         <div class="checks">
@@ -73,6 +73,6 @@
 </section>
 
 {% if not user.alerts_paused %}
-<form method="post" action="/alerts/pause-all"><button class="btn secondary">Pause all my alerts</button></form>
+<form method="post" action="{{ root }}/alerts/pause-all"><button class="btn secondary">Pause all my alerts</button></form>
 {% endif %}
 {% endblock %}

@@ -29,7 +29,7 @@ def _parse_days(raw: str | None) -> int:
         return 7
 
 
-def filter_url(venue: str, days: int, period: str, weekend: bool) -> str:
+def filter_url(venue: str, days: int, period: str, weekend: bool, prefix: str = "") -> str:
     """Home URL for a filter combination; defaults are left out so links never carry empty params."""
     params: list[tuple[str, str]] = []
     if venue != ALL:
@@ -40,7 +40,7 @@ def filter_url(venue: str, days: int, period: str, weekend: bool) -> str:
         params.append(("period", period))
     if weekend:
         params.append(("weekend", "1"))
-    return "/?" + urlencode(params) if params else "/"
+    return f"{prefix}/?" + urlencode(params) if params else f"{prefix}/"
 
 
 def hour_label(hour: int) -> str:
@@ -110,7 +110,7 @@ def index(
             "weekend": weekend_on,
         }
         state.update(overrides)
-        return filter_url(**state)
+        return filter_url(**state, prefix=settings.prefix)
 
     return templates.TemplateResponse(
         request,

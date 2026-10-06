@@ -6,21 +6,21 @@
   <meta name="robots" content="noindex">
   <title>{% block title %}CourtWatch{% endblock %}</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
-  <link rel="stylesheet" href="/static/style.css?v=3">
+  <link rel="stylesheet" href="{{ root }}/static/style.css?v=3">
   <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="container">
-      <a class="brand" href="/">🎾 CourtWatch</a>
+      <a class="brand" href="{{ root }}/">🎾 CourtWatch</a>
       <nav class="nav">
-        <a href="/" class="{{ 'active' if request.url.path == '/' }}">Courts</a>
+        <a href="{{ root }}/" class="{{ 'active' if request.url.path == '/' }}">Courts</a>
         {% if user %}
-          <a href="/alerts" class="{{ 'active' if request.url.path.startswith('/alerts') }}">My alerts</a>
-          {% if user.is_admin %}<a href="/admin" class="{{ 'active' if request.url.path.startswith('/admin') }}">Admin</a>{% endif %}
-          <form method="post" action="/logout"><button>Sign out</button></form>
+          <a href="{{ root }}/alerts" class="{{ 'active' if request.url.path.startswith('/alerts') }}">My alerts</a>
+          {% if user.is_admin %}<a href="{{ root }}/admin" class="{{ 'active' if request.url.path.startswith('/admin') }}">Admin</a>{% endif %}
+          <form method="post" action="{{ root }}/logout"><button>Sign out</button></form>
         {% else %}
-          <a href="/login">Sign in</a>
+          <a href="{{ root }}/login">Sign in</a>
         {% endif %}
       </nav>
     </div>

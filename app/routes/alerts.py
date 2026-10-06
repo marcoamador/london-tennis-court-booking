@@ -72,7 +72,7 @@ def create_rule(
     _insert_rule(
         request.app.state.db, user["id"], venue_ids, weekdays, f"{start:%H:%M}", f"{end:%H:%M}"
     )
-    return RedirectResponse("/alerts", status_code=303)
+    return RedirectResponse(request.app.state.settings.path("/alerts"), status_code=303)
 
 
 @router.post("/quick")
@@ -94,7 +94,7 @@ def quick_rule(
             '<td class="slot watching" title="You&#39;ll be emailed when a court frees up">'
             '<span><span class="bell">🔔</span><span class="lbl">watching</span></span></td>'
         )
-    return RedirectResponse("/alerts", status_code=303)
+    return RedirectResponse(request.app.state.settings.path("/alerts"), status_code=303)
 
 
 @router.post("/{rule_id}/toggle")
@@ -104,14 +104,14 @@ def toggle_rule(request: Request, rule_id: int, user=Depends(auth.require_user))
             "UPDATE alert_rules SET active = 1 - active WHERE id = ? AND user_id = ?",
             (rule_id, user["id"]),
         )
-    return RedirectResponse("/alerts", status_code=303)
+    return RedirectResponse(request.app.state.settings.path("/alerts"), status_code=303)
 
 
 @router.post("/{rule_id}/delete")
 def delete_rule(request: Request, rule_id: int, user=Depends(auth.require_user)):
     with request.app.state.db.connect() as conn:
         conn.execute("DELETE FROM alert_rules WHERE id = ? AND user_id = ?", (rule_id, user["id"]))
-    return RedirectResponse("/alerts", status_code=303)
+    return RedirectResponse(request.app.state.settings.path("/alerts"), status_code=303)
 
 
 @router.post("/pause-all")
@@ -120,7 +120,7 @@ def toggle_pause(request: Request, user=Depends(auth.require_user)):
         conn.execute(
             "UPDATE users SET alerts_paused = 1 - alerts_paused WHERE id = ?", (user["id"],)
         )
-    return RedirectResponse("/alerts", status_code=303)
+    return RedirectResponse(request.app.state.settings.path("/alerts"), status_code=303)
 
 
 @router.get("/pause")
