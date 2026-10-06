@@ -349,6 +349,14 @@ Hetzner's server backups (+20% of the server price) are a good second layer.
 
 ## Troubleshooting
 
+- **`git pull` says "You are not currently on a branch"**: that's normal. Deploys check out the exact
+  commit, which leaves the repo detached. Update with `scripts/deploy.sh` (it fetches `main` itself),
+  never `git pull`.
+- **`fatal: detected dubious ownership`**: you ran git as root or as another user. Run app commands as
+  the owner, e.g. `sudo -iu deploy /opt/courtwatch/scripts/deploy.sh`. Don't add a `safe.directory`
+  exception.
+- **`failed to read .env: unexpected character`**: a stray character in `.env` (e.g. typed before a
+  `#`). `grep -nvE '^\s*(#|$)|^[A-Z_][A-Z0-9_]*=' .env` lists the malformed lines.
 - **502 Bad Gateway** from nginx: the app isn't up. Check `docker compose ps` and `docker compose logs app` in `/opt/courtwatch`, and `curl http://127.0.0.1:8000/healthz`.
 - **certbot fails**: port 80 must be reachable from the internet (Hetzner firewall), and `nginx -t` must pass.
 - **No emails**: Admin page shows "console mode" if `SMTP_PASSWORD` is empty. Gmail needs 2-step verification enabled to create app passwords.
