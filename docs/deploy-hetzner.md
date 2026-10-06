@@ -26,8 +26,15 @@ If you use a Hetzner Cloud Firewall, allow inbound TCP 22, 80, 443 (and UDP 443)
 
 ## 2. Get the code and configure
 
+Create a non-root `deploy` user that owns the app and can run Docker (GitHub Actions will log in
+as this user):
+
 ```bash
+adduser --disabled-password --gecos "" deploy
+usermod -aG docker deploy
 git clone https://github.com/marcoamador/london-tennis-court-booking.git /opt/courtwatch
+chown -R deploy:deploy /opt/courtwatch
+su - deploy
 cd /opt/courtwatch
 cp .env.example .env
 nano .env
@@ -51,8 +58,11 @@ chmod 600 .env
 
 ## 3. Start
 
+As the `deploy` user:
+
 ```bash
-docker compose up -d --build
+cd /opt/courtwatch
+./scripts/deploy.sh
 docker compose logs -f app
 ```
 
@@ -64,11 +74,63 @@ https://94-130-138-168.sslip.io, sign in with `ADMIN_EMAIL`, go to **Admin**, an
 
 Admin → *Invite a friend* → they sign in at `/login` with that email.
 
-## Updating
+## 5. Automatic deploys with GitHub Actions
+
+`.github/workflows/deploy.yml` runs on every push to `main` (or manually via *Actions → Deploy →
+Run workflow*). It runs the tests, SSHes to the server, runs `scripts/deploy.sh <commit>` (fetch,
+check out exactly that commit, `docker compose up -d --build`), then waits for
+`https://94-130-138-168.sslip.io/healthz` to respond.
+
+### a. Create a deploy key (on your own machine)
 
 ```bash
-cd /opt/courtwatch && git pull && docker compose up -d --build
+ssh-keygen -t ed25519 -N "" -C "github-actions-courtwatch" -f courtwatch_deploy
 ```
+
+This gives you `courtwatch_deploy` (private, goes into GitHub) and `courtwatch_deploy.pub` (public,
+goes onto the server).
+
+### b. Authorise it on the server, locked to the deploy script
+
+As root on the server, paste the **public** key into this line in place of `ssh-ed25519 AAAA...`:
+
+```bash
+mkdir -p /home/deploy/.ssh
+echo 'command="/opt/courtwatch/scripts/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... github-actions-courtwatch' >> /home/deploy/.ssh/authorized_keys
+chown -R deploy:deploy /home/deploy/.ssh && chmod 700 /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+The `command=` prefix means this key can **only** run the deploy script, which accepts nothing but
+a commit SHA that is already on `origin/main`. A leaked key can redeploy your own code, nothing
+else.
+
+### c. Add the secrets in GitHub
+
+Repo → *Settings → Environments → New environment* `production`. Then add:
+
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `DEPLOY_SSH_KEY` | full contents of the **private** key file `courtwatch_deploy` |
+| Secret | `DEPLOY_HOST` | `94.130.138.168` |
+| Secret | `DEPLOY_USER` | `deploy` |
+| Secret | `DEPLOY_KNOWN_HOSTS` | output of `ssh-keyscan -t ed25519 94.130.138.168` (pins the server's identity) |
+| Variable | `SITE_HOST` | `94-130-138-168.sslip.io` |
+
+Optionally add yourself as a *required reviewer* on the environment, so each deploy waits for your
+click. Then delete the local private key file.
+
+### d. Try it
+
+*Actions → Deploy → Run workflow*. The log ends with `Deployed <sha>` and `Healthy`.
+
+## Updating by hand
+
+```bash
+su - deploy -c "/opt/courtwatch/scripts/deploy.sh"
+```
+
+This deploys the latest `origin/main`. Don't use `git pull` here, since deploys leave the checkout on a
+specific commit.
 
 ## Backups
 

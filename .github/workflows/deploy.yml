@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once; a newer push waits for the running one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.SITE_HOST }}
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+      - name: Deploy ${{ github.sha }}
+        # The server pins this key to scripts/deploy.sh (forced command); the argument is the
+        # commit to deploy, so the server ends up on exactly what was tested.
+        run: |
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "${{ github.sha }}"
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 5 "https://${{ vars.SITE_HOST }}/healthz"; then
+              echo; echo "Healthy"; exit 0
+            fi
+            sleep 6
+          done
+          echo "App did not become healthy in time" >&2
+          exit 1
