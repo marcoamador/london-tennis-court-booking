@@ -40,6 +40,6 @@ uv run python -m scripts.smoke   # fetch live availability once and print it
 
 ## Deploy
 
-See [docs/deploy-hetzner.md](docs/deploy-hetzner.md): Docker Compose with Caddy providing HTTPS on
-`94-130-138-168.sslip.io`. After a one-time setup, every push to `main` is tested and deployed by
+See [docs/deploy-hetzner.md](docs/deploy-hetzner.md): Docker Compose, behind the server's existing
+nginx (or an optional Caddy container), with HTTPS on `94-130-138-168.sslip.io`. After a one-time setup, every push to `main` is tested and deployed by
 GitHub Actions (`.github/workflows/deploy.yml`). PRs and other branches run CI only.

@@ -6,12 +6,16 @@ services:
       DATABASE_PATH: /data/courtwatch.db
     volumes:
       - data:/data
+    # Only reachable from the host itself; a reverse proxy (host nginx, or the optional caddy
+    # service below) is what faces the internet.
+    ports:
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
     restart: unless-stopped
-    expose:
-      - "8000"
 
+  # Optional: for a server with nothing on ports 80/443. Enable with COMPOSE_PROFILES=caddy in .env.
   caddy:
     image: caddy:2
+    profiles: [caddy]
     depends_on:
       - app
     ports:
@@ -19,7 +23,7 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      SITE_HOST: ${SITE_HOST:?Set SITE_HOST in .env, e.g. 94-130-138-168.sslip.io}
+      SITE_HOST: ${SITE_HOST:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
