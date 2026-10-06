@@ -112,7 +112,15 @@ header before each file. The header just above the `stocks` match is the file to
 `/etc/nginx/sites-enabled/` directly can miss it, because that folder usually holds symlinks, which
 `grep -r` skips.
 
-Open that file and paste the two `location` blocks from
+**If your nginx loads per-app snippet files** (e.g. the match is in `/etc/nginx/apps/stocks.conf`
+and a server block has `include /etc/nginx/apps/*.conf;`), the repo file can be copied as one of
+them, with no edits to existing files:
+
+```bash
+sudo cp /opt/courtwatch/deploy/nginx/courtwatch-subpath.conf /etc/nginx/apps/courtwatch.conf
+```
+
+**Otherwise**, open that file and paste the two `location` blocks from
 `/opt/courtwatch/deploy/nginx/courtwatch-subpath.conf` into its `server { ... }` block, the one with
 `listen 443 ssl`, next to the `/stocks` location. Then:
 
