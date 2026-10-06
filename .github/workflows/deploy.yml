@@ -32,11 +32,14 @@ jobs:
           chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
 
       - name: Deploy ${{ github.sha }}
-        # The server pins this key to scripts/deploy.sh (forced command); the argument is the
-        # commit to deploy, so the server ends up on exactly what was tested.
+        # Deploys exactly the commit that was tested. Works with a normal key, or with one the
+        # server pins to scripts/deploy.sh (forced command, which then only reads the SHA).
+        env:
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/courtwatch' }}
         run: |
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "${{ github.sha }}"
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "$DEPLOY_PATH/scripts/deploy.sh ${{ github.sha }}"
 
       - name: Health check
         run: |

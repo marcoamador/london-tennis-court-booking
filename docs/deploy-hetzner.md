@@ -31,15 +31,26 @@ Nothing new needs opening for the app itself, because it only listens on localho
 
 ## 2. Get the code and configure
 
-Create a non-root `deploy` user that owns the app and can run Docker (GitHub Actions will log in
-as this user):
+Pick the Linux user that will own and run the app. GitHub Actions will log in as this user to deploy.
+
+- **Your own login user** (simplest). It needs to run Docker without `sudo`: check that `docker ps`
+  works. If you get "permission denied", run `sudo usermod -aG docker $USER`, then log out and back in.
+- **Or a dedicated `deploy` user**, which keeps the app separate from your account:
+  ```bash
+  sudo adduser --disabled-password --gecos "" deploy
+  sudo usermod -aG docker deploy
+  ```
+
+Clone the code and give that user ownership. Replace `<app-user>` with your username or `deploy`:
 
 ```bash
-adduser --disabled-password --gecos "" deploy
-usermod -aG docker deploy
-git clone https://github.com/marcoamador/london-tennis-court-booking.git /opt/courtwatch
-chown -R deploy:deploy /opt/courtwatch
-su - deploy
+sudo git clone https://github.com/marcoamador/london-tennis-court-booking.git /opt/courtwatch
+sudo chown -R <app-user>:<app-user> /opt/courtwatch
+```
+
+Then, **as that user** (`sudo -iu deploy` if you chose the dedicated user):
+
+```bash
 cd /opt/courtwatch
 cp .env.example .env
 nano .env
@@ -67,7 +78,7 @@ Port 8000 on localhost must be free (`ss -tlnp | grep ':8000'` prints nothing). 
 
 ## 3. Start the app
 
-As the `deploy` user:
+As the app user:
 
 ```bash
 cd /opt/courtwatch
@@ -90,7 +101,7 @@ ROOT_PATH=/tennis
 BASE_URL=https://your-host/tennis
 ```
 
-and re-run `./scripts/deploy.sh` as the deploy user. Then, as root, find the site that serves `/stocks`:
+and re-run `./scripts/deploy.sh` as the app user. Then, as root, find the site that serves `/stocks`:
 
 ```bash
 grep -rln "location /stocks" /etc/nginx/sites-enabled/
@@ -108,7 +119,7 @@ Open `https://your-host/tennis/`. No new certificate is needed.
 
 ## 4b. nginx: serve on its own hostname
 
-As root (`exit` back from the deploy user):
+As root (or with `sudo`):
 
 ```bash
 cp /opt/courtwatch/deploy/nginx/courtwatch.conf /etc/nginx/sites-available/courtwatch
@@ -133,57 +144,182 @@ Admin → *Invite a friend* → they sign in at `/login` with that email.
 
 ## 6. Automatic deploys with GitHub Actions
 
-`.github/workflows/deploy.yml` runs on every push to `main` (or manually via *Actions → Deploy →
-Run workflow*). It runs the tests, SSHes to the server, runs `scripts/deploy.sh <commit>` (fetch,
-check out exactly that commit, `docker compose up -d --build`), then waits for
-`$APP_URL/healthz` to respond.
+`.github/workflows/deploy.yml` runs on every push to `main`, or manually via *Actions → Deploy →
+Run workflow*. It:
 
-### a. Create a deploy key (on your own machine)
+1. runs the tests,
+2. logs in to the server over SSH as the app user and runs `scripts/deploy.sh <commit>`, which
+   fetches, checks out exactly the tested commit and runs `docker compose up -d --build`,
+3. waits for `$APP_URL/healthz` to answer.
 
-```bash
-ssh-keygen -t ed25519 -N "" -C "github-actions-courtwatch" -f courtwatch_deploy
-```
+For step 2, GitHub needs an SSH key it can use to log in. You'll make a **new key just for GitHub**
+rather than reusing your personal one:
 
-This gives you `courtwatch_deploy` (private, goes into GitHub) and `courtwatch_deploy.pub` (public,
-goes onto the server).
+- A key stored in GitHub is only as safe as GitHub's secret storage. With a dedicated key you can
+  lock it so it can **only run the deploy script**, never open a shell.
+- You can revoke it any time by deleting one line on the server, and your own login is unaffected.
+- Your personal key stays only on your PC.
 
-### b. Authorise it on the server, locked to the deploy script
+An SSH key is a **pair** of files:
 
-As root on the server, paste the **public** key into this line in place of `ssh-ed25519 AAAA...`:
-
-```bash
-mkdir -p /home/deploy/.ssh
-echo 'command="/opt/courtwatch/scripts/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... github-actions-courtwatch' >> /home/deploy/.ssh/authorized_keys
-chown -R deploy:deploy /home/deploy/.ssh && chmod 700 /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys
-```
-
-The `command=` prefix means this key can **only** run the deploy script, which accepts nothing but
-a commit SHA that is already on `origin/main`. A leaked key can redeploy your own code, nothing
-else.
-
-### c. Add the secrets in GitHub
-
-Repo → *Settings → Environments → New environment* `production`. Then add:
-
-| Kind | Name | Value |
+| File | What it is | Where it goes |
 |---|---|---|
-| Secret | `DEPLOY_SSH_KEY` | full contents of the **private** key file `courtwatch_deploy` |
-| Secret | `DEPLOY_HOST` | `94.130.138.168` |
-| Secret | `DEPLOY_USER` | `deploy` |
-| Secret | `DEPLOY_KNOWN_HOSTS` | output of `ssh-keyscan -t ed25519 94.130.138.168` (pins the server's identity) |
-| Variable | `APP_URL` | the app's public URL, no trailing slash: `https://your-host/tennis` (4a) or `https://94-130-138-168.sslip.io` (4b) |
+| `courtwatch_deploy` | **private** key, the secret half | GitHub secret `DEPLOY_SSH_KEY` (then delete it from your PC) |
+| `courtwatch_deploy.pub` | **public** key, safe to share | the server, in the app user's `~/.ssh/authorized_keys` |
 
-Optionally add yourself as a *required reviewer* on the environment, so each deploy waits for your
-click. Then delete the local private key file.
+### 6.1 Create the key on your PC
 
-### d. Try it
+Open **PowerShell** on Windows (Terminal on macOS/Linux works the same). `ssh-keygen` is built into
+Windows 10/11:
 
-*Actions → Deploy → Run workflow*. The log ends with `Deployed <sha>` and `Healthy`.
+```powershell
+ssh-keygen -t ed25519 -C "github-actions-courtwatch" -f "$HOME\.ssh\courtwatch_deploy"
+```
+
+When it asks *Enter passphrase*, press **Enter twice** to leave it empty. GitHub Actions can't type a
+passphrase. The key is protected by GitHub's secret storage and by the server-side lock in 6.3.
+
+Check that both files exist:
+
+```powershell
+Get-ChildItem "$HOME\.ssh\courtwatch_deploy*"
+```
+
+You should see `courtwatch_deploy` and `courtwatch_deploy.pub`.
+
+### 6.2 Copy the public key
+
+```powershell
+Get-Content "$HOME\.ssh\courtwatch_deploy.pub"
+```
+
+It prints one line like `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... github-actions-courtwatch`. Copy the
+whole line.
+
+### 6.3 Install it on the server, locked to the deploy script
+
+SSH in as the app user and open the list of keys allowed to log in. For the dedicated `deploy` user,
+see the note further down.
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+nano ~/.ssh/authorized_keys
+```
+
+Add a **new line** at the end: this prefix, a space, then the public key line you copied:
+
+```
+command="/opt/courtwatch/scripts/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAAC3Nza... github-actions-courtwatch
+```
+
+Save (Ctrl+O, Enter, Ctrl+X), then fix the permissions. SSH ignores the file if others can write to it.
+
+```bash
+chmod 600 ~/.ssh/authorized_keys
+```
+
+> ⚠️ **Don't touch the other lines.** If you log in with a key, your own key is already in this file.
+> Leave it exactly as it is, and never put `command=...` in front of it, or your own login would
+> only run the deploy script. Keep your current SSH session open until you've confirmed, from a
+> second terminal, that you can still log in.
+
+What the prefix does: whenever someone logs in with **this** key, the server ignores whatever they
+asked to run and runs `deploy.sh` instead. The script only reads a commit SHA, and only deploys a
+commit that is already on `origin/main`. So even if this key leaked, it could only redeploy your own
+code. `no-pty` and the other options block interactive shells and tunnels.
+
+**Using the dedicated `deploy` user?** It has no password, so add the line as root instead:
+
+```bash
+sudo mkdir -p /home/deploy/.ssh
+sudo nano /home/deploy/.ssh/authorized_keys
+sudo chown -R deploy:deploy /home/deploy/.ssh
+sudo chmod 700 /home/deploy/.ssh && sudo chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+**App not in `/opt/courtwatch`?** Use your path in `command="..."`, and set the GitHub variable
+`DEPLOY_PATH` (6.5) to the same folder.
+
+### 6.4 Test the key from your PC
+
+Replace `<app-user>` with the user from step 2:
+
+```powershell
+ssh -i "$HOME\.ssh\courtwatch_deploy" <app-user>@94.130.138.168
+```
+
+If SSH asks you to confirm the server's fingerprint, type `yes`. Instead of a shell you should see
+the deploy run and end with `==> Deployed <sha>`, possibly after a `PTY allocation request failed`
+line, which is expected. That proves the key works **and** can't get a shell. Running it again is
+harmless: it just redeploys the latest `main`.
+
+### 6.5 Add the secrets to GitHub
+
+GitHub also needs the server's public fingerprint, so it can check it's really talking to your
+server. In PowerShell:
+
+```powershell
+ssh-keyscan -t ed25519 94.130.138.168
+```
+
+It prints one line starting with `94.130.138.168 ssh-ed25519 AAAA...`. Optionally confirm it's genuine:
+these two commands should print the same `SHA256:...` fingerprint. The first runs on your PC, the
+second on the server:
+
+```powershell
+ssh-keyscan -t ed25519 94.130.138.168 | ssh-keygen -lf -
+```
+
+```bash
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Now in GitHub, open the repo → **Settings** → **Environments** → **New environment**, name it
+`production`, and click **Configure environment**.
+
+Under **Environment secrets → Add environment secret**, add:
+
+| Name | Value |
+|---|---|
+| `DEPLOY_SSH_KEY` | the **private** key. Copy it with `Get-Content "$HOME\.ssh\courtwatch_deploy" -Raw \| Set-Clipboard` and paste. It must include the `-----BEGIN OPENSSH PRIVATE KEY-----` and `-----END OPENSSH PRIVATE KEY-----` lines. |
+| `DEPLOY_HOST` | `94.130.138.168` |
+| `DEPLOY_USER` | the app user from step 2 (your username, or `deploy`) |
+| `DEPLOY_KNOWN_HOSTS` | the full line printed by `ssh-keyscan -t ed25519 94.130.138.168` |
+
+Under **Environment variables → Add environment variable**, add:
+
+| Name | Value |
+|---|---|
+| `APP_URL` | the app's public URL, no trailing slash: `https://your-host/tennis` (4a) or `https://94-130-138-168.sslip.io` (4b) |
+| `DEPLOY_PATH` | *(optional)* only if the app isn't in `/opt/courtwatch` |
+
+Optional: under **Deployment protection rules**, tick **Required reviewers** and add yourself. Each
+deploy then waits for your approval in the Actions tab.
+
+### 6.6 Run it, then remove the private key from your PC
+
+Go to **Actions → Deploy → Run workflow**. The log ends with `==> Deployed <sha>` and `Healthy`. From
+now on every push to `main` deploys automatically.
+
+Once that works, delete the private key from your PC. GitHub has its copy, and you can always make a
+new key:
+
+```powershell
+Remove-Item "$HOME\.ssh\courtwatch_deploy"
+```
+
+### Revoking or replacing the key
+
+- **Revoke:** delete the `github-actions-courtwatch` line from the app user's
+  `~/.ssh/authorized_keys`. GitHub can no longer log in, and nothing else changes.
+- **Replace:** repeat 6.1 to 6.5 with a new key, and update the `DEPLOY_SSH_KEY` secret.
 
 ## Updating by hand
 
+As the app user:
+
 ```bash
-su - deploy -c "/opt/courtwatch/scripts/deploy.sh"
+/opt/courtwatch/scripts/deploy.sh
 ```
 
 This deploys the latest `origin/main`. Don't use `git pull` here, since deploys leave the checkout on a

@@ -1,15 +1,21 @@
 #!/usr/bin/env sh
-# Deploys a commit of origin/main. Run on the server, either by hand (./scripts/deploy.sh)
-# or by GitHub Actions through an SSH key whose authorized_keys entry forces this command.
-# The only input is the commit SHA (from SSH_ORIGINAL_COMMAND when forced); default: origin/main.
+# Deploys a commit of origin/main. Run on the server: by hand (./scripts/deploy.sh [sha]), by
+# GitHub Actions over SSH as `.../scripts/deploy.sh <sha>`, or through an SSH key whose
+# authorized_keys entry forces this command. The only input is the commit SHA; for a forced key it
+# is the last word of the requested command (nothing else in it is ever executed).
+# Default: origin/main.
 set -eu
 
 # Everything lives in a function so the shell has read the whole script before `git checkout`
 # can replace this file on disk.
 main() {
-  cd "${APP_DIR:-/opt/courtwatch}"
+  # The checkout this script lives in (override with APP_DIR).
+  cd "${APP_DIR:-$(dirname "$0")/..}"
 
-  ref="${SSH_ORIGINAL_COMMAND:-${1:-}}"
+  ref="${1:-}"
+  if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
+    ref="${SSH_ORIGINAL_COMMAND##* }"
+  fi
   case "$ref" in
     "") ref="origin/main" ;;
     *[!0-9a-f]*) echo "Refusing: expected a commit SHA, got '$ref'" >&2; exit 2 ;;
