@@ -180,3 +180,14 @@ def test_served_under_subpath(tmp_path):
 
         resp = client.post("/admin/invites", data={"email": "a b@x.com"}, follow_redirects=False)
         assert resp.headers["location"] == "/tennis/admin?msg=Invited+a+b%40x.com"
+
+
+def test_env_example_documents_every_setting():
+    from pathlib import Path
+
+    from app.config import Settings
+
+    example = (Path(__file__).parent.parent / ".env.example").read_text(encoding="utf-8")
+    documented = set(re.findall(r"^#? ?([A-Z][A-Z0-9_]*)=", example, flags=re.M))
+    missing = {name.upper() for name in Settings.model_fields} - documented
+    assert not missing, f"Add to .env.example: {sorted(missing)}"
