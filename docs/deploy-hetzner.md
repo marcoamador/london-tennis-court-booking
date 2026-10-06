@@ -104,8 +104,13 @@ BASE_URL=https://your-host/tennis
 and re-run `./scripts/deploy.sh` as the app user. Then, as root, find the site that serves `/stocks`:
 
 ```bash
-grep -rln "location /stocks" /etc/nginx/sites-enabled/
+sudo nginx -T 2>/dev/null | grep -nE "^# configuration file|stocks"
 ```
+
+`nginx -T` prints the configuration nginx is actually running, with a `# configuration file /path:`
+header before each file. The header just above the `stocks` match is the file to edit. Grepping
+`/etc/nginx/sites-enabled/` directly can miss it, because that folder usually holds symlinks, which
+`grep -r` skips.
 
 Open that file and paste the two `location` blocks from
 `/opt/courtwatch/deploy/nginx/courtwatch-subpath.conf` into its `server { ... }` block, the one with
