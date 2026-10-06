@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Admin · CourtWatch{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Admin</h1></div>
+{% if msg %}<div class="notice">{{ msg }}</div>{% endif %}
+{% if mail_console %}
+<div class="notice warn">Email is in <b>console mode</b> (no SMTP password set), so emails are only written to the server log.</div>
+{% endif %}
+
+<section class="card">
+  <div class="card-head">
+    <h2>Providers</h2>
+    <div class="row" style="flex:0 0 auto">
+      <form method="post" action="/admin/poll" class="inline"><button class="btn sm secondary">Poll now</button></form>
+      <form method="post" action="/admin/test-email" class="inline"><button class="btn sm secondary">Send me a test email</button></form>
+    </div>
+  </div>
+  <div class="grid-scroll">
+    <table class="list">
+      <thead><tr><th>Venue</th><th>Provider</th><th>Last success</th><th>Failures</th><th>Last error</th></tr></thead>
+      <tbody>
+      {% for v in venues %}
+        {% set s = statuses.get(v.id) %}
+        <tr>
+          <td>{{ v.name }}</td>
+          <td><span class="badge">{{ v.provider }}</span></td>
+          <td>{{ s.last_ok_at[:16].replace('T', ' ') ~ ' UTC' if s and s.last_ok_at else '—' }}</td>
+          <td>{{ s.consecutive_failures if s else '—' }}</td>
+          <td class="muted small">{{ (s.last_error or '')[:120] if s else '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Invite a friend</h2></div>
+  <div class="card-body">
+    <form method="post" action="/admin/invites" class="row" style="align-items:flex-end">
+      <div class="field" style="margin:0;flex:3 1 14rem"><label for="inv">Email</label><input id="inv" type="email" name="email" placeholder="friend@example.com" required></div>
+      <div style="flex:0 0 auto"><button class="btn" type="submit">Invite</button></div>
+    </form>
+    <p class="muted small" style="margin-bottom:0">They can then sign in at <code>/login</code> with that email. No email is sent automatically, so let them know.</p>
+  </div>
+  {% if invites %}
+  <table class="list">
+    <thead><tr><th>Invited email</th><th>Since</th><th></th></tr></thead>
+    <tbody>
+    {% for i in invites %}
+      <tr><td>{{ i.email }}</td><td>{{ i.created_at[:10] }}</td>
+        <td class="actions"><form method="post" action="/admin/invites/delete" class="inline"><input type="hidden" name="email" value="{{ i.email }}"><button class="btn sm danger">Remove</button></form></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Users</h2></div>
+  <table class="list">
+    <thead><tr><th>Email</th><th>Alerts</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr><td>{{ u.email }}{% if u.is_admin %} <span class="badge">admin</span>{% endif %}</td><td>{{ u.rules }}</td><td>{{ 'paused' if u.alerts_paused else 'active' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

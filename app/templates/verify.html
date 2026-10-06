@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Sign in · CourtWatch{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <div class="card-body">
+    {% if token and email %}
+      <h1>Sign in</h1>
+      <p class="muted">Continue as <b>{{ email }}</b>?</p>
+      <form method="post" action="/auth/verify">
+        <input type="hidden" name="token" value="{{ token }}">
+        <button class="btn block" type="submit">Sign in</button>
+      </form>
+    {% else %}
+      <h1>Link expired</h1>
+      <p class="muted">This sign-in link is invalid, expired or already used.</p>
+      <a class="btn block" href="/login">Get a new link</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

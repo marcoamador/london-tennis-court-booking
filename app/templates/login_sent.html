@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Check your email · CourtWatch{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <div class="card-body">
+    <h1>Check your email</h1>
+    <p>If <b>{{ email }}</b> has been invited, a sign-in link is on its way. It works once and expires in 15 minutes.</p>
+    <p class="muted small">Not invited yet? Ask whoever runs this CourtWatch to add you.</p>
+  </div>
+</section>
+{% endblock %}

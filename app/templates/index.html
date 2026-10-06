@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>East London Tennis Courts</h1>
+  <p>Free courts at a glance. {% if user %}Click a red slot to be emailed when it frees up.{% else %}<a href="/login">Sign in</a> to get emailed when a booked slot frees up.{% endif %}</p>
+</div>
+
+<nav class="tabs" aria-label="Venues">
+  <a href="{{ link(venue=all_id) }}" class="{{ 'on' if not venue }}">All venues</a>
+  {% for v in venues %}
+    <a href="{{ link(venue=v.id) }}" class="{{ 'on' if venue and v.id == venue.id }}">
+      {{ v.name }}{% if v.id in tracked %} <span class="count">{{ free_counts.get(v.id, 0) }}</span>{% endif %}
+    </a>
+  {% endfor %}
+</nav>
+
+<div class="toolbar">
+  <div class="segmented">
+    {% for p, label in period_labels.items() %}<a href="{{ link(period=p) }}" class="{{ 'on' if p == period }}">{{ label }}</a>{% endfor %}
+  </div>
+  <div class="segmented">
+    {% for n in day_choices %}<a href="{{ link(days=n, weekend=False) }}" class="{{ 'on' if days == n and not weekend }}">{{ n }} days</a>{% endfor %}
+    <a href="{{ link(weekend=not weekend) }}" class="{{ 'on' if weekend }}">Weekends</a>
+  </div>
+  {% if not venue %}
+  <div class="toolbar-end">
+    <button type="button" class="btn sm secondary" data-expand="1">Expand all</button>
+    <button type="button" class="btn sm secondary" data-expand="0">Collapse all</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if user or grids|selectattr('hours')|list %}
+<div class="legend-bar">
+  <span><span class="swatch free"></span>Courts available (click to book)</span>
+  <span><span class="swatch booked"></span>Fully booked{% if user %} <span class="muted">(click to get notified 📩)</span>{% endif %}</span>
+  {% if user %}<span><span class="swatch watching"></span>Watching</span>{% endif %}
+</div>
+{% endif %}
+
+{% for g in grids %}
+<details class="card venue{{ ' solo' if venue }}" data-venue="{{ g.venue.id }}" open>
+  <summary class="card-head">
+    <div class="venue-title">
+      <h2>{{ g.venue.name }}</h2>
+      <div class="muted small">{{ g.venue.area }} · {{ g.venue.note }}</div>
+    </div>
+    <div class="venue-meta">
+      {% if g.tracked %}<span class="free-pill{{ ' none' if not g.free_total }}">{{ g.free_total }} free</span>{% endif %}
+      {% if not g.tracked %}
+        <span class="status off">Not tracked</span>
+      {% elif g.last_error and g.stale %}
+        <span class="status warn" title="{{ g.last_error }}">Provider issue · {{ g.updated_ago }}</span>
+      {% elif g.stale or not g.last_ok_at %}
+        <span class="status warn">{{ g.updated_ago|capitalize }}</span>
+      {% else %}
+        <span class="status">Updated {{ g.updated_ago }}</span>
+      {% endif %}
+      {% if not venue %}<span class="chevron" aria-hidden="true"></span>{% endif %}
+    </div>
+  </summary>
+
+  {% if not g.tracked %}
+    <div class="empty">
+      <p>{{ g.venue.name }} doesn't publish its availability, so we can't track it yet.</p>
+      <a class="btn" href="{{ g.venue.booking_url() }}" target="_blank" rel="noopener">Check availability on the booking site →</a>
+    </div>
+  {% elif not g.hours %}
+    <div class="empty">No slots to show{% if not g.last_ok_at %} yet. The first update runs shortly after start-up{% else %} for these filters{% endif %}.</div>
+  {% else %}
+    <div class="grid-scroll">
+      <table class="avail">
+        <thead>
+          <tr>
+            <th class="time">Time</th>
+            {% for d in g.dates %}
+              <th class="{{ 'weekend' if d.weekday() >= 5 }}">{{ d.strftime('%a') }}<span class="date">{{ d.strftime('%b') }} {{ d.day }}</span></th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+        {% for h in g.hours %}
+          <tr>
+            <td class="time">{{ hour_label(h) }}</td>
+            {% for d in g.dates %}
+              {% set c = g.cell(d, h) %}
+              {% if c.state == 'free' %}
+                <td class="slot free">
+                  <a href="{{ g.venue.booking_url(d) }}" target="_blank" rel="noopener" title="Book {{ d.strftime('%a %d %b') }} {{ '%02d' % h }}:00{% if c.price %} · {{ c.price }}{% endif %}">
+                    <span class="n">{{ c.free }}</span><span class="lbl">court{{ 's' if c.free != 1 }}</span>
+                  </a>
+                </td>
+              {% elif c.state == 'booked' and (g.venue.id, d.weekday(), h) in watched %}
+                <td class="slot watching" title="You'll be emailed when a court frees up">
+                  <span><span class="bell">🔔</span><span class="lbl">watching</span></span>
+                </td>
+              {% elif c.state == 'booked' and user %}
+                <td class="slot booked clickable">
+                  <form hx-post="/alerts/quick" hx-target="closest td" hx-swap="outerHTML" method="post" action="/alerts/quick">
+                    <input type="hidden" name="venue_id" value="{{ g.venue.id }}">
+                    <input type="hidden" name="day" value="{{ d.isoformat() }}">
+                    <input type="hidden" name="hour" value="{{ h }}">
+                    <button title="Email me when a court frees up on {{ d.strftime('%A') }}s at {{ '%02d' % h }}:00"><span class="dash">–</span></button>
+                  </form>
+                </td>
+              {% elif c.state == 'booked' %}
+                <td class="slot booked clickable"><a href="/login" title="Sign in to get notified"><span class="dash">–</span></a></td>
+              {% elif c.state == 'past' %}
+                <td class="slot past"></td>
+              {% else %}
+                <td class="slot none"></td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      <span class="muted">Numbers are courts free for that hour.</span>
+      <a href="{{ g.venue.booking_url() }}" target="_blank" rel="noopener">Open booking site →</a>
+    </div>
+  {% endif %}
+</details>
+{% endfor %}
+
+<script>
+  document.querySelector(".tabs a.on")?.scrollIntoView({ block: "nearest", inline: "center" });
+</script>
+{% if not venue %}
+<script>
+  // Remember which venue cards this browser collapsed.
+  (function () {
+    const KEY = "cw-collapsed";
+    let collapsed = [];
+    try { collapsed = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+    const cards = document.querySelectorAll("details.venue");
+    const save = () => {
+      const ids = [...cards].filter(c => !c.open).map(c => c.dataset.venue);
+      try { localStorage.setItem(KEY, JSON.stringify(ids)); } catch (e) {}
+    };
+    cards.forEach(c => {
+      if (collapsed.includes(c.dataset.venue)) c.open = false;
+      c.addEventListener("toggle", save);
+    });
+    document.querySelectorAll("[data-expand]").forEach(b => b.addEventListener("click", () => {
+      cards.forEach(c => { c.open = b.dataset.expand === "1"; });
+    }));
+  })();
+</script>
+{% endif %}
+{% endblock %}

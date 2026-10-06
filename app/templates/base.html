@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{% block title %}CourtWatch{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+  <link rel="stylesheet" href="/static/style.css?v=3">
+  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <a class="brand" href="/">🎾 CourtWatch</a>
+      <nav class="nav">
+        <a href="/" class="{{ 'active' if request.url.path == '/' }}">Courts</a>
+        {% if user %}
+          <a href="/alerts" class="{{ 'active' if request.url.path.startswith('/alerts') }}">My alerts</a>
+          {% if user.is_admin %}<a href="/admin" class="{{ 'active' if request.url.path.startswith('/admin') }}">Admin</a>{% endif %}
+          <form method="post" action="/logout"><button>Sign out</button></form>
+        {% else %}
+          <a href="/login">Sign in</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="container site-foot">
+    Availability is read from the venues' booking systems every few minutes. Always confirm on the booking site.
+  </footer>
+</body>
+</html>

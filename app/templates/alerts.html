@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}My alerts · CourtWatch{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>My alerts</h1>
+  <p>We email <b>{{ user.email }}</b> when a matching slot frees up, from cancellations or newly released days.</p>
+</div>
+
+{% if user.alerts_paused %}
+<div class="notice warn">
+  <b>All alerts are paused.</b>
+  <form method="post" action="/alerts/pause-all" class="inline"><button class="btn sm secondary" style="margin-left:0.75rem">Resume alerts</button></form>
+</div>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2>Your alerts</h2></div>
+  {% if rules %}
+  <div class="grid-scroll">
+    <table class="list">
+      <thead><tr><th>Venues</th><th>Days</th><th>Start time</th><th></th></tr></thead>
+      <tbody>
+      {% for row, rule in rules %}
+        <tr class="{{ 'inactive' if not row.active }}">
+          <td>{% for vid in rule.venue_ids|sort %}{{ venue_name(vid) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+          <td>{% if rule.weekdays|length == 7 %}Every day{% elif rule.weekdays|sort|list == [5, 6] %}Weekends{% else %}{% for d in rule.weekdays|sort %}{{ weekday_names[d] }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</td>
+          <td>{{ row.time_from }} – {{ row.time_to }}</td>
+          <td class="actions">
+            <form method="post" action="/alerts/{{ row.id }}/toggle" class="inline"><button class="btn sm secondary">{{ 'Pause' if row.active else 'Resume' }}</button></form>
+            <form method="post" action="/alerts/{{ row.id }}/delete" class="inline"><button class="btn sm danger">Delete</button></form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">No alerts yet. Create one below, or click a red slot on the <a href="/">courts page</a>.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>New alert</h2></div>
+  <div class="card-body">
+    <form method="post" action="/alerts">
+      <fieldset>
+        <legend>Venues</legend>
+        <div class="checks">
+        {% for v in venues %}
+          {% if v.provider == 'courtside' %}
+            <label class="check disabled" title="Not trackable yet"><input type="checkbox" disabled> {{ v.name }}</label>
+          {% else %}
+            <label class="check"><input type="checkbox" name="venue_ids" value="{{ v.id }}"> {{ v.name }}</label>
+          {% endif %}
+        {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Days</legend>
+        <div class="checks">
+        {% for name in weekday_names %}
+          <label class="check"><input type="checkbox" name="weekdays" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 >= 5 }}> {{ name }}</label>
+        {% endfor %}
+        </div>
+      </fieldset>
+      <div class="row">
+        <div class="field"><label for="tf">Slot starts from</label><input id="tf" type="time" name="time_from" value="17:00" step="3600" required></div>
+        <div class="field"><label for="tt">Until (exclusive)</label><input id="tt" type="time" name="time_to" value="21:00" step="3600" required></div>
+      </div>
+      <button class="btn" type="submit">Create alert</button>
+    </form>
+  </div>
+</section>
+
+{% if not user.alerts_paused %}
+<form method="post" action="/alerts/pause-all"><button class="btn secondary">Pause all my alerts</button></form>
+{% endif %}
+{% endblock %}
