@@ -186,8 +186,12 @@ Open **PowerShell** on Windows (Terminal on macOS/Linux works the same). `ssh-ke
 Windows 10/11:
 
 ```powershell
+New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
 ssh-keygen -t ed25519 -C "github-actions-courtwatch" -f "$HOME\.ssh\courtwatch_deploy"
 ```
+
+The first line creates the `.ssh` folder if it doesn't exist yet. `ssh-keygen` won't create it, and
+fails with *No such file or directory*.
 
 When it asks *Enter passphrase*, press **Enter twice** to leave it empty. GitHub Actions can't type a
 passphrase. The key is protected by GitHub's secret storage and by the server-side lock in 6.3.
@@ -200,55 +204,47 @@ Get-ChildItem "$HOME\.ssh\courtwatch_deploy*"
 
 You should see `courtwatch_deploy` and `courtwatch_deploy.pub`.
 
-### 6.2 Copy the public key
+### 6.2 Build the authorized_keys line from the public key
+
+Run this in PowerShell. It reads your real public key from the `.pub` file, so there's nothing to copy
+by hand:
 
 ```powershell
-Get-Content "$HOME\.ssh\courtwatch_deploy.pub"
+$line = 'command="/opt/courtwatch/scripts/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ' + (Get-Content "$HOME\.ssh\courtwatch_deploy.pub")
+$line
 ```
 
-It prints one line like `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... github-actions-courtwatch`. Copy the
-whole line.
+Check that the printed line has a long key after `ssh-ed25519`, something like `AAAAC3NzaC1lZDI1NTE5AAAAI…`
+followed by about 40 more characters. If you see a literal `AAAA...`, that's a placeholder from an
+example, not your key.
 
 ### 6.3 Install it on the server, locked to the deploy script
 
-SSH in as the app user and open the list of keys allowed to log in. For the dedicated `deploy` user,
-see the note further down.
+**Dedicated `deploy` user:** run this from PowerShell. It logs in with your normal (root/sudo) SSH
+access, writes the line as `deploy`'s only key, fixes permissions, and prints the key's fingerprint:
 
-```bash
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-nano ~/.ssh/authorized_keys
+```powershell
+$line | ssh root@94.130.138.168 "mkdir -p /home/deploy/.ssh && tr -d '\r' > /home/deploy/.ssh/authorized_keys && chown -R deploy:deploy /home/deploy/.ssh && chmod 700 /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys && ssh-keygen -lf /home/deploy/.ssh/authorized_keys"
 ```
 
-Add a **new line** at the end: this prefix, a space, then the public key line you copied:
+`tr -d '\r'` strips the Windows line ending PowerShell adds. The printed `SHA256:…` fingerprint must
+match the one `ssh-keygen -lf "$HOME\.ssh\courtwatch_deploy.pub"` shows on your PC.
 
-```
-command="/opt/courtwatch/scripts/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAAC3Nza... github-actions-courtwatch
-```
+**Your own login user:** **append** instead (`>>`), because that file also holds your own key. Don't
+replace it:
 
-Save (Ctrl+O, Enter, Ctrl+X), then fix the permissions. SSH ignores the file if others can write to it.
-
-```bash
-chmod 600 ~/.ssh/authorized_keys
+```powershell
+$line | ssh <you>@94.130.138.168 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && tr -d '\r' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && ssh-keygen -lf ~/.ssh/authorized_keys"
 ```
 
-> ⚠️ **Don't touch the other lines.** If you log in with a key, your own key is already in this file.
-> Leave it exactly as it is, and never put `command=...` in front of it, or your own login would
-> only run the deploy script. Keep your current SSH session open until you've confirmed, from a
-> second terminal, that you can still log in.
+> ⚠️ Never put `command=...` in front of your **own** key's line, or your own login would only
+> run the deploy script. Keep your current SSH session open until you've confirmed, from a second
+> terminal, that you can still log in.
 
 What the prefix does: whenever someone logs in with **this** key, the server ignores whatever they
 asked to run and runs `deploy.sh` instead. The script only reads a commit SHA, and only deploys a
 commit that is already on `origin/main`. So even if this key leaked, it could only redeploy your own
 code. `no-pty` and the other options block interactive shells and tunnels.
-
-**Using the dedicated `deploy` user?** It has no password, so add the line as root instead:
-
-```bash
-sudo mkdir -p /home/deploy/.ssh
-sudo nano /home/deploy/.ssh/authorized_keys
-sudo chown -R deploy:deploy /home/deploy/.ssh
-sudo chmod 700 /home/deploy/.ssh && sudo chmod 600 /home/deploy/.ssh/authorized_keys
-```
 
 **App not in `/opt/courtwatch`?** Use your path in `command="..."`, and set the GitHub variable
 `DEPLOY_PATH` (6.5) to the same folder.
